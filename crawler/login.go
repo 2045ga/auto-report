@@ -2,13 +2,16 @@ package crawler
 
 import (
 	"auto-report/model"
+	"context"
 	"errors"
 	"github.com/devfeel/mapper"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 )
@@ -19,6 +22,9 @@ var (
 	POSTID    = "http://xgsm.hitsz.edu.cn/zhxy-xgzs/xg_mobile/xs/csh"
 	REPORT    = "http://xgsm.hitsz.edu.cn/zhxy-xgzs/xg_mobile/xs/getYqxx"
 	COMMITURL = "http://xgsm.hitsz.edu.cn/zhxy-xgzs/xg_mobile/xs/saveYqxx"
+
+	JW_Mirror   = "https://mr.mzz.pub:7002"
+	XGSM_Mirror = "http://mr.mzz.pub:7004"
 )
 
 func init() {
@@ -43,10 +49,53 @@ func getLt(client http.Client) (string, error) {
 	return lt, nil
 }
 
+// set mirror trickily
+func setMirror(client http.Client) http.Client {
+	client.Transport = &http.Transport{DialContext: func(ctx context.Context, network string, addr string) (net.Conn, error) {
+		_, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+		var target string
+		// tricky
+		if port == "7002" {
+			target = JW_Mirror
+		} else {
+			target = XGSM_Mirror
+		}
+		u, err := url.Parse(target)
+		if err != nil {
+			panic(err)
+		}
+		ip := u.Hostname()
+		port = u.Port()
+		if port == "" {
+			if u.Scheme == "https" {
+				port = "443"
+			} else {
+				port = "80"
+			}
+		}
+		if net.ParseIP(ip) == nil {
+			ips, err := net.LookupHost(ip)
+			if err != nil {
+				return nil, err
+			}
+			ip = ips[0]
+		}
+		return net.Dial(network, net.JoinHostPort(ip, port))
+	}}
+	return client
+}
+
 func login(account, password string) (http.Client, error) {
 	jar, _ := cookiejar.New(nil)
 	var client = http.Client{
 		Jar: jar,
+	}
+	// github action
+	if value := os.Getenv("CI"); value == "true" {
+		client = setMirror(client)
 	}
 	lt, err := getLt(client)
 	if err != nil {

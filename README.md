@@ -78,7 +78,7 @@ By default, this program will run at 8:15 a.m. everyday.
    By default, this program will run at 8:15 a.m. everyday.
 
 ## License
-
+kk
 auto-report is licensed by an MIT license as can be found in the LICENSE file.
 
 20210327
